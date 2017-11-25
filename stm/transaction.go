@@ -22,16 +22,16 @@ Represents a record that contains the metadata for a transaction.
 
 * `oldValues` - the vector containing the old values of the memory cells when they are updated in the transaction.
 
-* `readSet` - the set of names - addresses - of the memory cells that the transaction intends to read from.
+* `readSet` - the set of MemoryCell indices - addresses - of the memory cells that the transaction intends to read from.
 
-* `writeSet` - the set of names - addresses - of the memory cells that the transaction intends to write into or update.
+* `writeSet` - the set of MemoryCell indices - addresses - of the memory cells that the transaction intends to write to or update.
 */
 type Record struct {
 	status    bool
 	version   int
-	oldValues []Data
-	readSet   []string
-	writeSet  []string
+	oldValues map[uint]Data
+	readSet   []uint
+	writeSet  []uint
 }
 
 /*
@@ -45,6 +45,7 @@ It will carry out the actions mentioned while constructing it and will always be
 type Transaction struct {
 	metadata Record
 	actions  []func() bool
+	stm      *STM
 }
 
 /*
@@ -70,6 +71,7 @@ func (stm *STM) NewT() *TransactionContext {
 	tc := new(TransactionContext)
 	tc.transaction = new(Transaction)
 	tc.actions = make([]func() bool, 5)
+	tc.transaction.stm = stm
 	return tc
 }
 
@@ -96,10 +98,44 @@ func (tc *TransactionContext) Done() *Transaction {
 	tc.transaction.metadata = Record{
 		status:    false,
 		version:   0,
-		oldValues: make([]Data, 5),
-		readSet:   make([]string, 5),
-		writeSet:  make([]string, 5),
+		oldValues: make(map[uint]Data),
+		readSet:   make([]uint, 5),
+		writeSet:  make([]uint, 5),
 	}
 	tc.transaction.actions = tc.actions
 	return tc.transaction
+}
+
+/*
+ReadT :: A transactional read operation. Reads the data from the passed MemoryCell instance.
+When reading a MemoryCell, the trasaction doesn't need to take ownership.
+*/
+func (t *Transaction) ReadT(memcell *MemoryCell) Data {
+	// If the address of the memory cell is not in the writeset
+	// then, add it into the ReadSet, else do nothing
+	if !contains(t.metadata.writeSet, memcell.cellIndex) {
+		t.metadata.readSet = append(t.metadata.readSet, memcell.cellIndex)
+	}
+	data := memcell.data
+	// take backup into the oldValues
+	//# backup
+	t.metadata.oldValues[memcell.cellIndex] = *data
+	//# backup
+	return *data
+}
+
+/*
+WriteT :: A transactional write/update operation. Writes the data into the MemoryCell.
+When intending to write to a MemoryCell, a transaction must take ownership of the MemoryCell.
+*/
+func (t *Transaction) WriteT(memcell *MemoryCell, data Data) {
+	if contains(t.metadata.readSet, memcell.cellIndex) {
+		t.metadata.readSet = remove(t.metadata.readSet, memcell.cellIndex)
+		t.metadata.writeSet = append(t.metadata.writeSet, memcell.cellIndex)
+	}
+	currentData := memcell.data
+	//#backup
+	t.metadata.oldValues[memcell.cellIndex] = *currentData
+	//#backup
+	memcell.data = &data // data updated
 }

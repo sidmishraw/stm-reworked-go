@@ -41,6 +41,6 @@ contents.
 
 @return {Data} the data contained in the `MemoryCell`
 */
-func (cell *MemoryCell) GetData() Data {
-	return *cell.data
-}
+// func (cell *MemoryCell) GetData() Data {
+// 	return *cell.data
+// }
