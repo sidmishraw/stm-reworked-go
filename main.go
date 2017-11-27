@@ -235,7 +235,7 @@ func test2WithSTM(data *Data) {
 		// -- this will simulate Person 2 depositing 300$ into Account 3
 		// Finally, the value of the 3rd position should be consistent.
 
-		// #t1 definition
+		//# t1 definition
 		t1 := MySTM.NewT().
 			Do(func(t *Transaction) bool {
 				dinCell1 := t.ReadT(cell1).([]int) // read data from memory cell - reads are transactional operations
@@ -249,7 +249,7 @@ func test2WithSTM(data *Data) {
 				return true
 			}).
 			Done()
-		// #t1 definition
+		//# t1 definition
 
 		//# t2 definition
 		t2 := MySTM.NewT().
