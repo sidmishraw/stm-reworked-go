@@ -72,11 +72,11 @@ NewSTM :: Creates a new STM instance. This acts as the single shared space.
 */
 func NewSTM() *STM {
 	stm := new(STM)
-	stm._Memory = make([]*MemoryCell, 5)
+	stm._Memory = make([]*MemoryCell, 0)
 	stm.memMutex = new(sync.Mutex)
-	stm._Ownerships = make([]*Ownership, 5)
+	stm._Ownerships = make([]*Ownership, 0)
 	stm.ownerMutex = new(sync.Mutex)
-	stm.transactions = make([]*Transaction, 5)
+	stm.transactions = make([]*Transaction, 0)
 	stm.tMutex = new(sync.Mutex)
 	return stm
 }

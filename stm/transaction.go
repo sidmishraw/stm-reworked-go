@@ -9,6 +9,11 @@
 
 package stm
 
+import (
+	"reflect"
+	"sync"
+)
+
 /*
 Record ::
 
@@ -68,7 +73,7 @@ NewT :: Makes a new transaction context.
 func (stm *STM) NewT() *TransactionContext {
 	tc := new(TransactionContext)
 	tc.transaction = new(Transaction)
-	tc.actions = make([]func() bool, 5)
+	tc.actions = make([]func() bool, 0)
 	tc.transaction.stm = stm
 	//# synchronized addition of transactions to shared STM
 	stm.tMutex.Lock()
@@ -97,8 +102,8 @@ func (tc *TransactionContext) Done() *Transaction {
 		status:    false,
 		version:   0,
 		oldValues: make(map[uint]Data),
-		readSet:   make([]uint, 5),
-		writeSet:  make([]uint, 5),
+		readSet:   make([]uint, 0),
+		writeSet:  make([]uint, 0),
 	}
 	tc.transaction.actions = tc.actions
 	return tc.transaction
@@ -174,7 +179,7 @@ func (t *Transaction) WriteT(memcell *MemoryCell, data Data) (succeeded bool) {
 Go :: Starts executing the `Transaction t`.
 Keeps looping infinitely, retrying the actions of the transaction until it executes successfully.
 */
-func (t *Transaction) Go() {
+func (t *Transaction) Go(wg *sync.WaitGroup) {
 	//# spawn and execute in new thread/goroutine
 	go func() {
 		//# Transaction's execution loop, keeps retrying till it successfully executes
@@ -198,6 +203,7 @@ func (t *Transaction) Go() {
 			}
 		}
 		//# Transaction's execution loop, keeps retrying till it successfully executes
+		wg.Done()
 	}()
 	//# spawn and execute in new thread/goroutine
 }
@@ -248,5 +254,35 @@ the commit should fail and the Transaction should rollback and restart from the 
 The commit failure is signified by a `cmtStatus = false`. The success is represented as `cmtStatus = true`.
 */
 func (t *Transaction) commit() (cmtStatus bool) {
+	cmtStatus = true // let's assume we have a successful commit
+	for _, rsMemCellIndex := range t.metadata.readSet {
+		backup := t.metadata.oldValues[rsMemCellIndex] // get the Transaction's backup to compare against the current state in STM
+		current := *t.stm._Memory[rsMemCellIndex].data
+		if !reflect.DeepEqual(backup, current) {
+			// since the backup and current values don't match
+			// there might be a modification and the this Transaction's
+			// computation might be wrong now, need to rollback and retry
+			cmtStatus = false
+			break
+		}
+	}
+	//# release ownership of MemoryCells in the write set
+	// only release ownership in case of successful commit
+	// otherwise the ownership will be released by the rollback subroutine
+	if cmtStatus {
+		for _, wsMemCellIndex := range t.metadata.writeSet {
+			//# release ownership
+			dummyTOwn := new(Ownership)
+			dummyTOwn.memoryCell = t.stm._Memory[wsMemCellIndex]
+			dummyTOwn.owner = t
+			//# synchronized release of ownership
+			t.stm.ownerMutex.Lock()
+			t.stm._Ownerships = releaseOwnership(t.stm._Ownerships, dummyTOwn)
+			t.stm.ownerMutex.Unlock()
+			//# synchronized release of ownership
+			//# release ownership
+		}
+	}
+	//# release ownership of MemoryCells in the write set
 	return cmtStatus
 }
