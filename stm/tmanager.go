@@ -10,6 +10,10 @@ memory in this framework.
 
 package stm
 
+import (
+	"sync"
+)
+
 /*
 
 STM ::
@@ -24,16 +28,25 @@ The `size` represents the size of memory to be used by the STM.
 
 * `_Memory`: It's the vector that holds the `MemoryCell`s.
 
+* `memMutex`: It's the mutual exclusive lock for _Memory
+
 * `_Ownerships`: It's the vector that holds the `Ownership` objects.
 
-* `records`: It's the vector that holds the `Record` objects that represent the transaction's metadata.
+* `ownerMutex`: It's the mutex lock for synchronizing `_Ownerships`
+
+* `transactions`: It's the vector that holds the pointers to `Transaction`s.
+
+* `tMutex`: It's the mutex lock for synchronizing `transactions`
 
 */
 type STM struct {
 	//size        uint
-	_Memory     []*MemoryCell
-	_Ownerships []*Ownership
-	records     []*Record
+	_Memory      []*MemoryCell
+	memMutex     *sync.Mutex // mutex for synchronizing `_Memory`
+	_Ownerships  []*Ownership
+	ownerMutex   *sync.Mutex // mutex for synchronizing `_Ownerships`
+	transactions []*Transaction
+	tMutex       *sync.Mutex // mutex for synchronizing `transactions`
 }
 
 /*
@@ -46,29 +59,39 @@ It has pointers to both the `MemoryCell` and the owner `Record`.
 
 * `memoryCell`: The pointer to the `MemoryCell`.
 
-* `record`: the pointer to the `Record` or the owner transaction.
+* `owner`: the pointer to the `Transaction` or the owner transaction.
 
 */
 type Ownership struct {
 	memoryCell *MemoryCell
-	record     *Record
+	owner      *Transaction
 }
 
 /*
+NewSTM :: Creates a new STM instance. This acts as the single shared space.
+*/
+func NewSTM() *STM {
+	stm := new(STM)
+	stm._Memory = make([]*MemoryCell, 5)
+	stm.memMutex = new(sync.Mutex)
+	stm._Ownerships = make([]*Ownership, 5)
+	stm.ownerMutex = new(sync.Mutex)
+	stm.transactions = make([]*Transaction, 5)
+	stm.tMutex = new(sync.Mutex)
+	return stm
+}
 
-MakeMemCell ::
-
-----------------
-
-Makes a new `MemoryCell` holding the data.
-
-@param {*Data} data The pointer to the Data
-@return {*MemoryCell} The pointer to the MemoryCell
+/*
+MakeMemCell :: Makes a new `MemoryCell` holding the data.
 */
 func (stm *STM) MakeMemCell(data *Data) *MemoryCell {
 	newMemCell := new(MemoryCell)
 	newMemCell.cellIndex = uint(len(stm._Memory))
 	newMemCell.data = data
+	//# synchronized memory cell creation
+	stm.memMutex.Lock()
 	stm._Memory = append(stm._Memory, newMemCell)
+	stm.memMutex.Unlock()
+	//# synchronized memory cell creation
 	return newMemCell
 }
