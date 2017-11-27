@@ -4,7 +4,7 @@ This is a reworked optimistic STM in Go.
 
 ## Features:
 
-Composable conurrency. Pass around concurrent pieces of code.
+Composable concurrency. Pass around concurrent pieces of code.
 
 ```go
 //# t1 definition
