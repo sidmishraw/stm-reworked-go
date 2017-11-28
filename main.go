@@ -271,11 +271,7 @@ func test2WithSTM(data *Data) {
 		fmt.Println("T2 = ", t2)
 
 		fmt.Println()
-		wg := new(sync.WaitGroup)
-		wg.Add(2)
-		t1.Go(wg)
-		t2.Go(wg)
-		wg.Wait()
+		MySTM.Exec(t1, t2)
 	}
 	fmt.Println("Cell1 = ", *cell1)
 	tlog := MySTM.NewT().Do(func(t *Transaction) bool {
@@ -283,8 +279,5 @@ func test2WithSTM(data *Data) {
 		fmt.Println("Finally, cell1 has value = ", finalVal)
 		return true
 	}).Done()
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
-	tlog.Go(wg)
-	wg.Wait()
+	MySTM.Exec(tlog)
 }

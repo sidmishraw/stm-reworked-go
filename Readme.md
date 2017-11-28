@@ -23,13 +23,17 @@ t1 := MySTM.NewT().
   Done()
 //# t1 definition
 
-//# t1 invocation somewhere else
+//# t1 invocation somewhere else. Manual style
 // This is WIP, will refine some more
 wg := new(sync.WaitGroup)
 wg.Add(1)
 t1.Go(wg) // executes the Transaction t1 concurrently
 wg.Wait()
 // This is WIP, will refine some more
+//# t1 invocation somewhere else
+
+//# t1 invocation somewhere else. Using builtin utility
+MySTM.Exec(t1)
 //# t1 invocation somewhere else
 ```
 

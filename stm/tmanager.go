@@ -95,3 +95,27 @@ func (stm *STM) MakeMemCell(data *Data) *MemoryCell {
 	//# synchronized memory cell creation
 	return newMemCell
 }
+
+/*
+Exec :: Executes the transactions and holds the calling thread so that it doesn't exit prematurely.
+This is just an utility method to make life easier for the consumer. The consumer can also use
+Transaction's Go() to achieve this, but then the consumer has to pass their own sync.WaitGroup instance.
+
+> Note: This just shortens the code written, it does have the same effect as the following piece of code
+ 		wg := new(sync.WaitGroup)
+		wg.Add(2)
+		t1.Go(wg)
+		t2.Go(wg)
+		wg.Wait()
+
+> Note: Make sure that the STM instance executing the transaction is same as the one which was used to
+construct it. Otherwise, it will result in an error since the shared memory won't be the same.
+*/
+func (stm *STM) Exec(ts ...*Transaction) {
+	wg := new(sync.WaitGroup)
+	for _, t := range ts {
+		wg.Add(1)
+		t.Go(wg)
+	}
+	wg.Wait()
+}
