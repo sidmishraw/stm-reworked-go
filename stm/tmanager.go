@@ -11,6 +11,7 @@ memory in this framework.
 package stm
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -118,4 +119,9 @@ func (stm *STM) Exec(ts ...*Transaction) {
 		t.Go(wg)
 	}
 	wg.Wait()
+}
+
+// Display displays the _Memory array of the STM
+func (stm *STM) Display() {
+	fmt.Println("_Memory = ", stm._Memory)
 }
