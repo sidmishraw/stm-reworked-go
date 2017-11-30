@@ -127,3 +127,18 @@ func (stm *STM) Display() {
 	fmt.Println("_Ownerships = ", stm._Ownerships)
 	fmt.Println("Transactions = ", stm.transactions)
 }
+
+// ForkAndExec forks from the calling thread and then executes all the transactions on the
+// forked thread. Basically it can be visualized as running the stm.Exec in another thread.
+// The consumer can simulate similar behavior by doing something like:
+// `go MySTM.Exec(ts...)`. This is a convinience method to keep it uniform.
+func (stm *STM) ForkAndExec(ts ...*Transaction) {
+	go func(ts ...*Transaction) {
+		wg := new(sync.WaitGroup)
+		for _, t := range ts {
+			wg.Add(1)
+			t.Go(wg)
+		}
+		wg.Wait()
+	}(ts...)
+}
