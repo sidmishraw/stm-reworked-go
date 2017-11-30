@@ -124,4 +124,6 @@ func (stm *STM) Exec(ts ...*Transaction) {
 // Display displays the _Memory array of the STM
 func (stm *STM) Display() {
 	fmt.Println("_Memory = ", stm._Memory)
+	fmt.Println("_Ownerships = ", stm._Ownerships)
+	fmt.Println("Transactions = ", stm.transactions)
 }
