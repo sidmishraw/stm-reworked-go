@@ -132,7 +132,8 @@ func (t *Transaction) ReadT(memcell *MemoryCell) Data {
 /*
 WriteT :: A transactional write/update operation. Writes the data into the MemoryCell.
 When intending to write to a MemoryCell, a transaction must take ownership of the MemoryCell.
-If the transaction failed to take ownership of the MemoryCell, write fails. Returns true when
+If the transaction failed to take ownership of the MemoryCell, write fails. Returns true when the data
+is successfully written into the MemoryCell.
 */
 func (t *Transaction) WriteT(memcell *MemoryCell, data Data) (succeeded bool) {
 	//# Adding to write set
