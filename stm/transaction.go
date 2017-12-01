@@ -34,9 +34,9 @@ Represents a record that contains the metadata for a transaction.
 type Record struct {
 	status    bool
 	version   int
-	oldValues map[uint]Data
-	readSet   []uint
-	writeSet  []uint
+	oldValues map[*MemoryCell]Data
+	readSet   []*MemoryCell
+	writeSet  []*MemoryCell
 }
 
 /*
@@ -101,9 +101,9 @@ func (tc *TransactionContext) Done() *Transaction {
 	tc.transaction.metadata = Record{
 		status:    false,
 		version:   0,
-		oldValues: make(map[uint]Data),
-		readSet:   make([]uint, 0),
-		writeSet:  make([]uint, 0),
+		oldValues: make(map[*MemoryCell]Data, 0),
+		readSet:   make([]*MemoryCell, 0),
+		writeSet:  make([]*MemoryCell, 0),
 	}
 	tc.transaction.actions = tc.actions
 	return tc.transaction
@@ -117,14 +117,14 @@ func (t *Transaction) ReadT(memcell *MemoryCell) Data {
 	//# Adding to read set
 	// If the address of the memory cell is not in the writeset
 	// then, add it into the ReadSet, else do nothing
-	if !contains(t.metadata.writeSet, memcell.cellIndex) {
-		t.metadata.readSet = append(t.metadata.readSet, memcell.cellIndex)
+	if !contains(t.metadata.writeSet, memcell) {
+		t.metadata.readSet = append(t.metadata.readSet, memcell)
 	}
 	//# Adding to read set
 	data := memcell.data
 	// take backup into the oldValues
 	//# backup
-	t.metadata.oldValues[memcell.cellIndex] = *data
+	t.metadata.oldValues[memcell] = *data
 	//# backup
 	return *data
 }
@@ -137,9 +137,9 @@ is successfully written into the MemoryCell.
 */
 func (t *Transaction) WriteT(memcell *MemoryCell, data Data) (succeeded bool) {
 	//# Adding to write set
-	if contains(t.metadata.readSet, memcell.cellIndex) {
-		t.metadata.readSet = remove(t.metadata.readSet, memcell.cellIndex)
-		t.metadata.writeSet = append(t.metadata.writeSet, memcell.cellIndex)
+	if contains(t.metadata.readSet, memcell) {
+		t.metadata.readSet = remove(t.metadata.readSet, memcell)
+		t.metadata.writeSet = append(t.metadata.writeSet, memcell)
 	}
 	//# Adding to write set
 	//# Take ownership of the memCell and write
@@ -156,7 +156,7 @@ func (t *Transaction) WriteT(memcell *MemoryCell, data Data) (succeeded bool) {
 		//# synchronized ownership acquired
 		currentData := memcell.data
 		//#backup
-		t.metadata.oldValues[memcell.cellIndex] = *currentData
+		t.metadata.oldValues[memcell] = *currentData
 		//#backup
 		memcell.data = &data // data updated
 		succeeded = true
@@ -165,7 +165,7 @@ func (t *Transaction) WriteT(memcell *MemoryCell, data Data) (succeeded bool) {
 		// proceed with the Write operation.
 		currentData := memcell.data
 		//#backup
-		t.metadata.oldValues[memcell.cellIndex] = *currentData
+		t.metadata.oldValues[memcell] = *currentData
 		//#backup
 		memcell.data = &data // data updated
 		succeeded = true
@@ -188,8 +188,11 @@ func (t *Transaction) Go(wg *sync.WaitGroup) {
 			if exStatus := t.executeActions(); !exStatus {
 				// execute all the actions for the Transaction t, upon success exStatus = true else false
 				// rollback the transaction since the actions have failed to execute successfully
+				// fmt.Println("t execution failed, rollback")
 				t.rollback()
-			} else if cmtStatus := t.commit(); cmtStatus {
+				continue
+			}
+			if cmtStatus := t.commit(); cmtStatus {
 				// the actions of the transaction have executed successfully
 				// and the commit operation was successful
 				t.metadata.status = true // updating the status to true signifying that the transaction executed successfully
@@ -199,6 +202,7 @@ func (t *Transaction) Go(wg *sync.WaitGroup) {
 				// the actions of the transaction executed properly, but,
 				// the commit operation failed, so, rollback and continue the transaction
 				// from the beginning.
+				// fmt.Println("t commit failed, rollback")
 				t.rollback()
 				continue
 			}
@@ -228,16 +232,16 @@ rollback :: Rollsback the `Transaction t`. This includes restoring the oldValues
 func (t *Transaction) rollback() {
 	// to rollback the transaction, restore the backups in the
 	// Transaction's metadata called oldValues.
-	for _, wsMemCellIndex := range t.metadata.writeSet {
-		backup := t.metadata.oldValues[wsMemCellIndex] // fetch backup from the map
+	for _, wsMemCell := range t.metadata.writeSet {
+		backup := t.metadata.oldValues[wsMemCell] // fetch backup from the map
 		//# synchronized updation of _Memory
 		t.stm.memMutex.Lock()
-		t.stm._Memory[wsMemCellIndex].data = &backup // restore the backup
+		t.stm._Memory[wsMemCell.cellIndex].data = &backup // restore the backup
 		t.stm.memMutex.Unlock()
 		//# synchronized updation of _Memory
 		//# release ownership
 		dummyTOwn := new(Ownership)
-		dummyTOwn.memoryCell = t.stm._Memory[wsMemCellIndex]
+		dummyTOwn.memoryCell = t.stm._Memory[wsMemCell.cellIndex]
 		dummyTOwn.owner = t
 		//# synchronized release of ownership
 		t.stm.ownerMutex.Lock()
@@ -256,9 +260,9 @@ The commit failure is signified by a `cmtStatus = false`. The success is represe
 */
 func (t *Transaction) commit() (cmtStatus bool) {
 	cmtStatus = true // let's assume we have a successful commit
-	for _, rsMemCellIndex := range t.metadata.readSet {
-		backup := t.metadata.oldValues[rsMemCellIndex] // get the Transaction's backup to compare against the current state in STM
-		current := *t.stm._Memory[rsMemCellIndex].data
+	for _, rsMemCell := range t.metadata.readSet {
+		backup := t.metadata.oldValues[rsMemCell] // get the Transaction's backup to compare against the current state in STM
+		current := *t.stm._Memory[rsMemCell.cellIndex].data
 		if !reflect.DeepEqual(backup, current) {
 			// since the backup and current values don't match
 			// there might be a modification and the this Transaction's
@@ -271,10 +275,10 @@ func (t *Transaction) commit() (cmtStatus bool) {
 	// only release ownership in case of successful commit
 	// otherwise the ownership will be released by the rollback subroutine
 	if cmtStatus {
-		for _, wsMemCellIndex := range t.metadata.writeSet {
+		for _, wsMemCell := range t.metadata.writeSet {
 			//# release ownership
 			dummyTOwn := new(Ownership)
-			dummyTOwn.memoryCell = t.stm._Memory[wsMemCellIndex]
+			dummyTOwn.memoryCell = t.stm._Memory[wsMemCell.cellIndex]
 			dummyTOwn.owner = t
 			//# synchronized release of ownership
 			t.stm.ownerMutex.Lock()

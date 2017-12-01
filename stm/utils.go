@@ -10,7 +10,7 @@
 package stm
 
 /* contains - Checks if the data is in the container */
-func contains(container []uint, data uint) bool {
+func contains(container []*MemoryCell, data *MemoryCell) bool {
 	for _, value := range container {
 		if value == data {
 			return true
@@ -20,7 +20,7 @@ func contains(container []uint, data uint) bool {
 }
 
 /* remove - Removes the data from the container */
-func remove(container []uint, data uint) []uint {
+func remove(container []*MemoryCell, data *MemoryCell) []*MemoryCell {
 	index := -1
 	for i, v := range container {
 		if v == data {

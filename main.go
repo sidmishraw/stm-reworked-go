@@ -42,17 +42,18 @@ func main() {
 
 	// for test2
 	// casting Data, since I need a pointer to an interface and not the interface
-	data1 := Data([]int{1, 2, 3, 4, 5})
+	// data1 := Data([]int{1, 2, 3, 4, 5})
 
 	// test1WithoutUsingSTMNL(&data1T1)
 
-	fmt.Println()
+	// fmt.Println()
 
 	// test1WithoutUsingSTMWL(&data2T1)
 
-	fmt.Println()
+	// fmt.Println()
 
-	test2WithSTM(&data1)
+	// test2WithSTM(&data1)
+	stm.TestF()
 }
 
 /*
@@ -225,7 +226,41 @@ func test2WithSTM(data *Data) {
 
 	cell1 := MySTM.MakeMemCell(data)
 
-	for i := 0; i < 1; i++ {
+	//# t1 definition
+	t1 := MySTM.NewT().
+		Do(func(t *Transaction) bool {
+			dinCell1 := t.ReadT(cell1).([]int) // read data from memory cell - reads are transactional operations
+			fmt.Println("T1 :: Data in cell1 = dinCell1 = ", dinCell1)
+			dinCell1[2] = dinCell1[2] - 2
+			return t.WriteT(cell1, dinCell1)
+		}).
+		// Do(func(t *Transaction) bool {
+		// 	dinCell1 := t.ReadT(cell1).([]int) // read data from memory cell - reads are transactional operations
+		// 	fmt.Println("T1' :: Data in cell1 = dinCell1 = ", dinCell1)
+		// 	return true
+		// }).
+		Done()
+	//# t1 definition
+
+	//# t2 definition
+	t2 := MySTM.NewT().
+		Do(func(t *Transaction) bool {
+			dinCell1 := t.ReadT(cell1).([]int) // read data from memory cell - reads are transactional operations
+			fmt.Println("T2 :: Data in cell1 = dinCell1 = ", dinCell1)
+			dinCell1[2] = dinCell1[2] + 3
+			return t.WriteT(cell1, dinCell1)
+		}).
+		// Do(func(t *Transaction) bool {
+		// 	dinCell1 := t.ReadT(cell1).([]int) // read data from memory cell - reads are transactional operations
+		// 	fmt.Println("T2' :: Data in cell1 = dinCell1 = ", dinCell1)
+		// 	return true
+		// }).
+		Done()
+	//# t2 definition
+
+	for i := 0; i < 1000; i++ {
+
+		fmt.Println()
 
 		// For a 10001 times, I want to do similiar operations on the slice in the data.
 		// I'll make 2 transactions.
@@ -235,49 +270,20 @@ func test2WithSTM(data *Data) {
 		// -- this will simulate Person 2 depositing 300$ into Account 3
 		// Finally, the value of the 3rd position should be consistent.
 
-		//# t1 definition
-		t1 := MySTM.NewT().
-			Do(func(t *Transaction) bool {
-				dinCell1 := t.ReadT(cell1).([]int) // read data from memory cell - reads are transactional operations
-				fmt.Println("T1 :: Data in cell1 = dinCell1 = ", dinCell1)
-				dinCell1[2] = dinCell1[2] - 2
-				return t.WriteT(cell1, dinCell1)
-			}).
-			Do(func(t *Transaction) bool {
-				dinCell1 := t.ReadT(cell1).([]int) // read data from memory cell - reads are transactional operations
-				fmt.Println("T1' :: Data in cell1 = dinCell1 = ", dinCell1)
-				return true
-			}).
-			Done()
-		//# t1 definition
-
-		//# t2 definition
-		t2 := MySTM.NewT().
-			Do(func(t *Transaction) bool {
-				dinCell1 := t.ReadT(cell1).([]int) // read data from memory cell - reads are transactional operations
-				fmt.Println("T2 :: Data in cell1 = dinCell1 = ", dinCell1)
-				dinCell1[2] = dinCell1[2] + 3
-				return t.WriteT(cell1, dinCell1)
-			}).
-			Do(func(t *Transaction) bool {
-				dinCell1 := t.ReadT(cell1).([]int) // read data from memory cell - reads are transactional operations
-				fmt.Println("T2' :: Data in cell1 = dinCell1 = ", dinCell1)
-				return true
-			}).
-			Done()
-		//# t2 definition
-
 		fmt.Println("T1 = ", t1)
 		fmt.Println("T2 = ", t2)
 
 		fmt.Println()
 		MySTM.Exec(t1, t2)
 	}
+
 	fmt.Println("Cell1 = ", *cell1)
+
 	tlog := MySTM.NewT().Do(func(t *Transaction) bool {
 		finalVal := t.ReadT(cell1).([]int)
 		fmt.Println("Finally, cell1 has value = ", finalVal)
 		return true
 	}).Done()
+
 	MySTM.Exec(tlog)
 }
