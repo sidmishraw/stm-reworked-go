@@ -117,7 +117,7 @@ func (t *Transaction) ReadT(memcell *MemoryCell) Data {
 	//# Adding to read set
 	// If the address of the memory cell is not in the writeset
 	// then, add it into the ReadSet, else do nothing
-	if !contains(t.metadata.writeSet, memcell) {
+	if !contains(t.metadata.writeSet, memcell) && !contains(t.metadata.readSet, memcell) {
 		t.metadata.readSet = append(t.metadata.readSet, memcell)
 	}
 	//# Adding to read set
@@ -139,6 +139,8 @@ func (t *Transaction) WriteT(memcell *MemoryCell, data Data) (succeeded bool) {
 	//# Adding to write set
 	if contains(t.metadata.readSet, memcell) {
 		t.metadata.readSet = remove(t.metadata.readSet, memcell)
+	}
+	if !contains(t.metadata.writeSet, memcell) {
 		t.metadata.writeSet = append(t.metadata.writeSet, memcell)
 	}
 	//# Adding to write set

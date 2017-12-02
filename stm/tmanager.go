@@ -11,7 +11,7 @@ memory in this framework.
 package stm
 
 import (
-	"fmt"
+	"log"
 	"sync"
 )
 
@@ -48,6 +48,7 @@ type STM struct {
 	ownerMutex   *sync.Mutex // mutex for synchronizing `_Ownerships`
 	transactions []*Transaction
 	tMutex       *sync.Mutex // mutex for synchronizing `transactions`
+	loggerMutex  *sync.Mutex // mutex for logging synchronously
 }
 
 /*
@@ -79,6 +80,7 @@ func NewSTM() *STM {
 	stm.ownerMutex = new(sync.Mutex)
 	stm.transactions = make([]*Transaction, 0)
 	stm.tMutex = new(sync.Mutex)
+	stm.loggerMutex = new(sync.Mutex)
 	return stm
 }
 
@@ -123,13 +125,13 @@ func (stm *STM) Exec(ts ...*Transaction) {
 
 // Display displays the _Memory array of the STM
 func (stm *STM) Display() {
-	fmt.Print("[ ")
+	log.Print("[ ")
 	for _, memoryCell := range stm._Memory {
-		fmt.Print(*memoryCell, " ")
+		log.Print(*memoryCell, " ")
 	}
-	fmt.Print("]\n")
-	fmt.Println("_Ownerships = ", stm._Ownerships)
-	fmt.Println("Transactions = ", stm.transactions)
+	log.Print("]\n")
+	log.Println("_Ownerships = ", stm._Ownerships)
+	log.Println("Transactions = ", stm.transactions)
 }
 
 // ForkAndExec forks from the calling thread and then executes all the transactions on the
@@ -145,4 +147,11 @@ func (stm *STM) ForkAndExec(ts ...*Transaction) {
 		}
 		wg.Wait()
 	}(ts...)
+}
+
+// Log logs the messages synchronously
+func (stm *STM) Log(msgs ...interface{}) {
+	stm.loggerMutex.Lock()
+	log.Println(msgs...)
+	stm.loggerMutex.Unlock()
 }
