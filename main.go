@@ -42,7 +42,7 @@ func main() {
 
 	// for test2
 	// casting Data, since I need a pointer to an interface and not the interface
-	// data1 := Data([]int{1, 2, 3, 4, 5})
+	data1 := Data([]int{1, 2, 3, 4, 5})
 
 	// test1WithoutUsingSTMNL(&data1T1)
 
@@ -52,8 +52,7 @@ func main() {
 
 	// fmt.Println()
 
-	// test2WithSTM(&data1)
-	stm.TestF()
+	test2WithSTM(&data1)
 }
 
 /*
