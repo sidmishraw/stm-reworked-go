@@ -62,7 +62,7 @@ type Transaction struct {
 	metadata   Record
 	actions    []func() bool
 	stm        *STM
-	isScanning bool            // true value indicates that the transaction is in Scan mode
+	IsScanning bool            // true value indicates that the transaction is in Scan mode
 	tvars      map[string]Data // map of all the transactional variables
 }
 
@@ -132,7 +132,7 @@ func (tc *TransactionContext) Done(name ...string) *Transaction {
 		writeSet:  make([]*MemoryCell, 0),
 	}
 	tc.transaction.actions = tc.actions
-	tc.transaction.isScanning = true // default is true
+	tc.transaction.IsScanning = true // default is true
 	return tc.transaction
 }
 
@@ -148,7 +148,7 @@ func (tc *TransactionContext) Done(name ...string) *Transaction {
 //	// so make sure that you don't put `WriteT` operations inside this
 // }
 func (t *Transaction) GetTVar(name string) Data {
-	if t.isScanning {
+	if t.IsScanning {
 		return nil
 	}
 	return t.tvars[name]
@@ -159,7 +159,7 @@ func (t *Transaction) GetTVar(name string) Data {
 // Usage:
 // t.PutTVar("foo", []int{1,2,3})
 func (t *Transaction) PutTVar(name string, value Data) {
-	if t.isScanning {
+	if t.IsScanning {
 		return
 	}
 	t.tvars[name] = value
@@ -183,7 +183,7 @@ func (t *Transaction) ReadT(memcell *MemoryCell, dataContainer Data) bool {
 	//# Adding to read set
 	// If the address of the memory cell is not in the writeset
 	// then, add it into the ReadSet, else do nothing
-	if t.isScanning {
+	if t.IsScanning {
 		if !contains(t.metadata.writeSet, memcell) && !contains(t.metadata.readSet, memcell) {
 			t.metadata.readSet = append(t.metadata.readSet, memcell)
 		}
@@ -207,7 +207,7 @@ is successfully written into the MemoryCell.
 */
 func (t *Transaction) WriteT(memcell *MemoryCell, data Data) (succeeded bool) {
 	//# Adding to write set
-	if t.isScanning {
+	if t.IsScanning {
 		// if contains(t.metadata.readSet, memcell) {
 		// 	t.metadata.readSet = remove(t.metadata.readSet, memcell)
 		// }
@@ -301,11 +301,11 @@ func (t *Transaction) Go(wg *sync.WaitGroup) {
 
 // scanActions scans the actions to determine
 func (t *Transaction) scanActions() {
-	t.isScanning = true // set the isScanning flag to true to signify that the scan has started
+	t.IsScanning = true // set the IsScanning flag to true to signify that the scan has started
 	for _, action := range t.actions {
 		action() // execute the action in scan mode, don't bother about failing
 	}
-	t.isScanning = false // set the isScanning flag to false to signify that the scan has ended
+	t.IsScanning = false // set the IsScanning flag to false to signify that the scan has ended
 }
 
 // takeOwnerships signals the Ownership taking phase. If for some reason the transaction fails to take ownership, it will fail and repeat from the beginning

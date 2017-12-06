@@ -53,7 +53,7 @@ func main() {
 
 	// fmt.Println()
 
-	for j := 0; j < 1000; j++ {
+	for j := 0; j < 1; j++ {
 		test2WithSTM(&data1)
 	}
 }
@@ -251,7 +251,7 @@ func test2WithSTM(data *Data) {
 	//# t2 definition
 
 	//# simulate a 1000 times
-	for i := 0; i < 1080; i++ {
+	for i := 0; i < 10; i++ {
 		// For a 10001 times, I want to do similiar operations on the slice in the data.
 		// I'll make 2 transactions.
 		// t1 will update the 3rd posn in the array by subtracting 2 to it
