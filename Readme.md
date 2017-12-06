@@ -2,7 +2,9 @@
 
 Author: Sidharth Mishra
 
-This is the reworked optimistic STM in Go.
+</br>
+
+`This is the reworked optimistic STM in Go.`
 
 </br>
 </br>
