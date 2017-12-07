@@ -23,7 +23,7 @@ const debugFlag bool = false
 //# For Debugging
 
 // Record represents a record that contains the metadata for a transaction.
-// * `status` - the status of the transaction, true if it has sucessfully completed, else false
+// * `status` - the status of the transaction, true if it has successfully completed, else false
 // * `version` - the version of the transaction, initially starts at 0, its incremented after every termination
 // * `oldValues` - the vector containing the old values of the memory cells when they are updated in the transaction.
 // * `readSet` - the set of MemoryCell indices - addresses - of the memory cells that the transaction intends to read from.
