@@ -11,54 +11,21 @@ memory in this framework.
 package stm
 
 import (
-	"bytes"
 	"log"
 	"sync"
 )
 
-/*
-
-STM ::
-
--------
-
-Represents the STM (Software Transactional Memory). It is the only piece of
-shared memory in the framework.
-
-* `_Memory`: It's the vector that holds the `MemoryCell`s.
-
-* `_Ownerships`: It's the vector that holds the MemoryCell's ownerships
-
-*/
+// STM represents the STM (Software Transactional Memory). It is the only piece of
+// shared memory in the framework.
+// `_Memory`: It's the vector that holds the `MemoryCell`s.
+// `_Ownerships`: It's the vector that holds the MemoryCell's ownerships
 type STM struct {
 	stmMutex    *sync.Mutex          // stm's mutex
 	_Memory     []*MemoryCell        // MemoryCells
 	_Ownerships map[int]*Transaction // *Ownership
 }
 
-/*
-@Deprecated
-
-Ownership ::
-
---------------
-
-`Ownership` is a structure that links the memory cells to it's owning transaction (`Record`).
-It has pointers to both the `MemoryCell` and the owner `Record`.
-
-* `memoryCell`: The pointer to the `MemoryCell`.
-
-* `owner`: the pointer to the `Transaction` or the owner transaction.
-
-*/
-// type Ownership struct {
-// 	memoryCell *MemoryCell
-// 	owner      *Transaction
-// }
-
-/*
-NewSTM :: Creates a new STM instance. This acts as the single shared space.
-*/
+// NewSTM creates a new STM instance. This acts as the single shared space.
 func NewSTM() *STM {
 	stm := new(STM)
 	stm.stmMutex = new(sync.Mutex)
@@ -67,17 +34,11 @@ func NewSTM() *STM {
 	return stm
 }
 
-/*
-MakeMemCell :: Makes a new `MemoryCell` holding the data.
-*/
+// MakeMemCell makes a new `MemoryCell` holding the data.
 func (stm *STM) MakeMemCell(data Data) *MemoryCell {
 	newMemCell := new(MemoryCell)
 	newMemCell.cellIndex = uint(len(stm._Memory))
-	newMemCell.data = new(bytes.Buffer)       // make the bytes buffer to hold the memcell's data
-	writeStatus := newMemCell.writeData(data) // encode the bytes and write into the buffer
-	if !writeStatus {
-		log.Fatalln("Failed to create MemoryCell - Encoding failed!")
-	}
+	newMemCell.writeData(data)
 	//# add memory cell to STM - synchoronously
 	stm.stmMutex.Lock()
 	stm._Memory = append(stm._Memory, newMemCell)
@@ -86,21 +47,17 @@ func (stm *STM) MakeMemCell(data Data) *MemoryCell {
 	return newMemCell
 }
 
-/*
-Exec :: Executes the transactions and holds the calling thread so that it doesn't exit prematurely.
-This is just an utility method to make life easier for the consumer. The consumer can also use
-Transaction's Go() to achieve this, but then the consumer has to pass their own sync.WaitGroup instance.
-
-> Note: This just shortens the code written, it does have the same effect as the following piece of code
- 		wg := new(sync.WaitGroup)
-		wg.Add(2)
-		t1.Go(wg)
-		t2.Go(wg)
-		wg.Wait()
-
-> Note: Make sure that the STM instance executing the transaction is same as the one which was used to
-construct it. Otherwise, it will result in an error since the shared memory won't be the same.
-*/
+// Exec executes the transactions and holds the calling thread so that it doesn't exit prematurely.
+// This is just an utility method to make life easier for the consumer. The consumer can also use
+// Transaction's Go() to achieve this, but then the consumer has to pass their own sync.WaitGroup instance.
+// > Note: This just shortens the code written, it does have the same effect as the following piece of code
+//  		wg := new(sync.WaitGroup)
+// 		wg.Add(2)
+// 		t1.Go(wg)
+// 		t2.Go(wg)
+// 		wg.Wait()
+// > Note: Make sure that the STM instance executing the transaction is same as the one which was used to
+// construct it. Otherwise, it will result in an error since the shared memory won't be the same.
 func (stm *STM) Exec(ts ...*Transaction) {
 	wg := new(sync.WaitGroup)
 	for _, t := range ts {
@@ -113,7 +70,7 @@ func (stm *STM) Exec(ts ...*Transaction) {
 // Display displays the _Memory array of the STM
 func (stm *STM) Display() {
 	for i, memcell := range stm._Memory {
-		log.Println("memcell index = ", i, " memcell contents = ", *memcell.data)
+		log.Println("memcell index = ", i, " memcell contents = ", memcell.data)
 	}
 	log.Println("_Ownerships = ", stm._Ownerships)
 }

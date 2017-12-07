@@ -16,13 +16,12 @@ Composable concurrency. Pass around concurrent pieces of code.
 ```go
 //# t1 definition
 t1 := MySTM.NewT().
-        Do(func(t *Transaction) bool {
-          dinCell1 := make([]int, 0)
-          t.ReadT(cell1, &dinCell1) // read data from memory cell - reads are transactional operations
-          dinCell1[2] = dinCell1[2] - 2
-          return t.WriteT(cell1, dinCell1)
-        }).
-        Done("T1")
+  Do(func(t *Transaction) bool {
+    dinCell1 := t.ReadT(cell1).(*MySlice) // read data from memory cell - reads are transactional operations
+    dinCell1.Slice[2] = dinCell1.Slice[2] - 2
+    return t.WriteT(cell1, dinCell1) // write data into the memorycell
+  }).
+  Done("T1")
 //# t1 definition
 
 //# t1 invocation somewhere else. Manual style
@@ -46,6 +45,23 @@ MySTM.ForkAndExec(t1)
 
 </br>
 </br>
+
+## Breaking changes from v0.0.2
+
+* Reworked the way data is stored in the MemoryCell. Now data is stored in the form of
+  `Data` interface. The consumer has to provide the implementation for the `Data` they
+  want to store in the MemoryCell. I believe this is the safest way to deal with data in
+  the MemoryCell.
+
+* The consumer must implement the `Clone` method inorder to store the data in the STM's
+  memorycell. Because of this, the `ReadT` API has changed again.
+
+  ```Go
+  dinCell1 := t.ReadT(cell1).(*MySlice)
+  ```
+
+  I had to go through all these changes because, the `gob` package didn't provide encoding
+  for structures with private fields.
 
 ## Breaking changes from v0.0.1
 

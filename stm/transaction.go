@@ -10,8 +10,6 @@
 package stm
 
 import (
-	"bytes"
-	"encoding/gob"
 	"log"
 	"reflect"
 	"sync"
@@ -24,23 +22,12 @@ const debugFlag bool = false
 
 //# For Debugging
 
-/*
-Record ::
-
------------
-
-Represents a record that contains the metadata for a transaction.
-
-* `status` - the status of the transaction, true if it has sucessfully completed, else false
-
-* `version` - the version of the transaction, initially starts at 0, its incremented after every termination
-
-* `oldValues` - the vector containing the old values of the memory cells when they are updated in the transaction.
-
-* `readSet` - the set of MemoryCell indices - addresses - of the memory cells that the transaction intends to read from.
-
-* `writeSet` - the set of MemoryCell indices - addresses - of the memory cells that the transaction intends to write to or update.
-*/
+// Record represents a record that contains the metadata for a transaction.
+// * `status` - the status of the transaction, true if it has sucessfully completed, else false
+// * `version` - the version of the transaction, initially starts at 0, its incremented after every termination
+// * `oldValues` - the vector containing the old values of the memory cells when they are updated in the transaction.
+// * `readSet` - the set of MemoryCell indices - addresses - of the memory cells that the transaction intends to read from.
+// * `writeSet` - the set of MemoryCell indices - addresses - of the memory cells that the transaction intends to write to or update.
 type Record struct {
 	name      string
 	status    bool
@@ -50,14 +37,8 @@ type Record struct {
 	writeSet  []*MemoryCell
 }
 
-/*
-Transaction ::
-
----------------
-
-The transaction, as a component. This can be passed around. It has its own context.
-It will carry out the actions mentioned while constructing it and will always be consistent.
-*/
+// Transaction the transaction, as a component. This can be passed around. It has its own context.
+// It will carry out the actions mentioned while constructing it and will always be consistent.
 type Transaction struct {
 	metadata   Record
 	actions    []func() bool
@@ -66,23 +47,14 @@ type Transaction struct {
 	tvars      map[string]Data // map of all the transactional variables
 }
 
-/*
-TransactionContext ::
-
-----------------------
-
-A transaction context - just like Monads - inspired by Monads.
-
-This defines a context within which the STM operations will be available.
-*/
+// TransactionContext a transaction context - just like Monads - inspired by Monads.
+// This defines a context within which the STM operations will be available.
 type TransactionContext struct {
 	actions     []func() bool
 	transaction *Transaction
 }
 
-/*
-NewT :: Makes a new transaction context.
-*/
+// NewT makes a new transaction context.
 func (stm *STM) NewT() *TransactionContext {
 	tc := new(TransactionContext)
 	tc.transaction = new(Transaction)
@@ -92,12 +64,10 @@ func (stm *STM) NewT() *TransactionContext {
 	return tc
 }
 
-/*
-Do :: Is used to chain actions together in the transaction.
-Each action is wrapped inside an anonymous lambda. This method will add a wrapper and pass the
-`Transaction` so that the action is within the desired Transaction's context.
-In DB terms, this will represent an `Action`. A transaction comprises of multiple `Actions`.
-*/
+// Do is used to chain actions together in the transaction.
+// Each action is wrapped inside an anonymous lambda. This method will add a wrapper and pass the
+// `Transaction` so that the action is within the desired Transaction's context.
+// In DB terms, this will represent an `Action`. A transaction comprises of multiple `Actions`.
 func (tc *TransactionContext) Do(lambda func(*Transaction) bool) *TransactionContext {
 	tc.actions = append(tc.actions, func() bool { return lambda(tc.transaction) })
 	return tc
@@ -115,9 +85,7 @@ func (tc *TransactionContext) Where(name string, value Data) *TransactionContext
 	return tc
 }
 
-/*
-Done :: Gets the componentized `Transaction` that can be passed around and used as needed.
-*/
+// Done gets the componentized `Transaction` that can be passed around and used as needed.
 func (tc *TransactionContext) Done(name ...string) *Transaction {
 	tName := "t"
 	if len(name) != 0 {
@@ -167,18 +135,13 @@ func (t *Transaction) PutTVar(name string, value Data) {
 
 //# Transactional Variables
 
-/*
-ReadT :: A transactional read operation. Reads the data from the passed MemoryCell instance.
-When reading a MemoryCell, the trasaction doesn't need to take ownership.
-*/
-func (t *Transaction) ReadT(memcell *MemoryCell, dataContainer Data) bool {
+// ReadT a transactional read operation. Reads the data from the passed MemoryCell instance.
+// When reading a MemoryCell, the trasaction doesn't need to take ownership.
+func (t *Transaction) ReadT(memcell *MemoryCell) Data {
 	//# read data from stm
 	t.stm.stmMutex.Lock()
-	rStatus := t.stm._Memory[memcell.cellIndex].readData(dataContainer)
+	data := t.stm._Memory[memcell.cellIndex].readData()
 	t.stm.stmMutex.Unlock()
-	if !rStatus {
-		return false
-	}
 	//# read data from stm
 	//# Adding to read set
 	// If the address of the memory cell is not in the writeset
@@ -188,23 +151,21 @@ func (t *Transaction) ReadT(memcell *MemoryCell, dataContainer Data) bool {
 			t.metadata.readSet = append(t.metadata.readSet, memcell)
 		}
 		t.log(t.metadata.name, " Scanning, added ", memcell, " to readSet", t.metadata.readSet)
-		t.log(t.metadata.name, " and got data = ", dataContainer)
-		return true // early return, no need to take backup during scan phase
+		t.log(t.metadata.name, " and got data = ", data)
+		return data // early return, no need to take backup during scan phase
 	}
 	//# Adding to read set
 	//# backup
 	// take backup into the oldValues
-	t.metadata.oldValues[memcell] = dataContainer
+	t.metadata.oldValues[memcell] = data
 	//# backup
-	return true
+	return data
 }
 
-/*
-WriteT :: A transactional write/update operation. Writes the data into the MemoryCell.
-When intending to write to a MemoryCell, a transaction must take ownership of the MemoryCell.
-If the transaction failed to take ownership of the MemoryCell, write fails. Returns true when the data
-is successfully written into the MemoryCell.
-*/
+// WriteT a transactional write/update operation. Writes the data into the MemoryCell.
+// When intending to write to a MemoryCell, a transaction must take ownership of the MemoryCell.
+// If the transaction failed to take ownership of the MemoryCell, write fails. Returns true when the data
+// is successfully written into the MemoryCell.
 func (t *Transaction) WriteT(memcell *MemoryCell, data Data) (succeeded bool) {
 	//# Adding to write set
 	if t.IsScanning {
@@ -239,10 +200,8 @@ func (t *Transaction) WriteT(memcell *MemoryCell, data Data) (succeeded bool) {
 	return succeeded
 }
 
-/*
-Go :: Starts executing the `Transaction t`.
-Keeps looping infinitely, retrying the actions of the transaction until it executes successfully.
-*/
+// Go starts executing the `Transaction t`.
+// Keeps looping infinitely, retrying the actions of the transaction until it executes successfully.
 func (t *Transaction) Go(wg *sync.WaitGroup) {
 	//# spawn and execute in new thread/goroutine
 	go func() {
@@ -337,9 +296,7 @@ func (t *Transaction) takeOwnerships() bool {
 	return status
 }
 
-/*
-executeActions :: Executes the actions serially, returns true if all the actions were executed successfully, else returns false.
-*/
+// executeActions executes the actions serially, returns true if all the actions were executed successfully, else returns false.
 func (t *Transaction) executeActions() bool {
 	for _, action := range t.actions {
 		status := action()
@@ -350,10 +307,8 @@ func (t *Transaction) executeActions() bool {
 	return true
 }
 
-/*
-rollback :: Rollsback the `Transaction t`.
-Releasing the ownerships held by the transaction.
-*/
+// rollback rolls back the `Transaction t`.
+// Releasing the ownerships held by the transaction.
 func (t *Transaction) rollback() {
 	// to rollback the transaction, restore the backups in the
 	// Transaction's metadata called oldValues.
@@ -373,25 +328,20 @@ func (t *Transaction) rollback() {
 	//# reset the writeSet, readSet, and oldValues
 }
 
-/*
-commit :: Commits the Transaction t. After committing, the Transaction releases the ownership of the MemoryCells and their values become visible to all the other transactions.
-Commit depends on the readSet members. If the value of the readSet members have changed in the meantime,
-the commit should fail and the Transaction should rollback and restart from the beginning.
-The commit failure is signified by a `cmtStatus = false`. The success is represented as `cmtStatus = true`.
-*/
+// commit commits the Transaction t. After committing, the Transaction releases the ownership of the MemoryCells and their values become visible to all the other transactions.
+// Commit depends on the readSet members. If the value of the readSet members have changed in the meantime,
+// the commit should fail and the Transaction should rollback and restart from the beginning.
+// The commit failure is signified by a `cmtStatus = false`. The success is represented as `cmtStatus = true`.
 func (t *Transaction) commit() (cmtStatus bool) {
 	cmtStatus = true // let's assume we have a successful commit
 	//# check readSet members for inconsistencies
 	for _, rsMemCell := range t.metadata.readSet {
 		backup := t.metadata.oldValues[rsMemCell] // get the Transaction's backup to compare against the current state in STM
 		t.stm.stmMutex.Lock()
-		current := t.stm._Memory[rsMemCell.cellIndex].data
+		current := t.stm._Memory[rsMemCell.cellIndex].readData()
 		t.stm.stmMutex.Unlock()
-		buffer := new(bytes.Buffer)
-		encoder := gob.NewEncoder(buffer)
-		encoder.Encode(backup)
-		t.log(t.metadata.name, "backup = ", backup, "and buffer bytes = ", buffer.Bytes(), "  and current bytes = ", current.Bytes())
-		if !reflect.DeepEqual(buffer.Bytes(), current.Bytes()) && !contains(t.metadata.writeSet, rsMemCell) {
+		t.log(t.metadata.name, "backup = ", backup, "and current value = ", current)
+		if !reflect.DeepEqual(backup, current) && !contains(t.metadata.writeSet, rsMemCell) {
 			// since the backup and current values don't match
 			// there might be a modification and the this Transaction's
 			// computation might be wrong now, need to rollback and retry

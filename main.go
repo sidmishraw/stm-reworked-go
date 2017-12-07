@@ -9,7 +9,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"sync"
 
@@ -32,6 +31,20 @@ type Transaction = stm.Transaction
 // MySTM :: The STM
 var MySTM = stm.NewSTM()
 
+// MySlice is the wrapper type for my data to be used in the STM
+type MySlice struct {
+	Slice []int
+}
+
+// Clone returns a copy of the MySlice object. This is used for implementing STM's Data inteface.
+func (ms *MySlice) Clone() Data {
+	scopy := make([]int, len(ms.Slice))
+	copy(scopy, ms.Slice)
+	myslice := new(MySlice)
+	myslice.Slice = scopy
+	return Data(myslice)
+}
+
 func main() {
 
 	// In go, the arrays are not reference types, so taking their address doesn't work as expected
@@ -43,18 +56,20 @@ func main() {
 
 	// for test2
 	// casting Data, since I need a pointer to an interface and not the interface
-	data1 := Data([]int{1, 2, 3, 4, 5})
+	data1 := new(MySlice)
+	data1.Slice = []int{1, 2, 3, 4, 5}
 
-	// test1WithoutUsingSTMNL(&data1T1)
+	// test1WithoutUsingSTMNL(data1)
 
-	// fmt.Println()
+	// log.Println()
 
 	// test1WithoutUsingSTMWL(&data2T1)
 
-	// fmt.Println()
+	// log.Println()
+	log.Println("data1 = ", data1)
 
-	for j := 0; j < 1; j++ {
-		test2WithSTM(&data1)
+	for j := 0; j < 1000; j++ {
+		test2WithSTM(data1)
 	}
 }
 
@@ -87,12 +102,12 @@ d2 =  [1 2 5555669 4 5]
 data =  [1 2 5555669 4 5]
 
 */
-func test1WithoutUsingSTMNL(data *Data) {
+func test1WithoutUsingSTMNL(data Data) {
 
-	d2 := (*data).([]int) // go's type assertion is tedious
+	d2 := data.(*MySlice) // go's type assertion is tedious
 
-	fmt.Println("d2 =", d2, " and d2 address = ", &d2)
-	fmt.Println("data = ", *data, " and address:: ", data)
+	log.Println("d2 =", d2, " and d2 address = ", &d2)
+	log.Println("data = ", data, " and address:: ", &data)
 
 	for i := 0; i < 10001; i++ {
 		wg := new(sync.WaitGroup) // the countdown latch in Go
@@ -101,28 +116,22 @@ func test1WithoutUsingSTMNL(data *Data) {
 		// starting `thread 1`.
 		//--------------------
 		// In `thread 1`, I'll try to update the 3rd position to 2 a 1000 times.
-		go func(data *[]int) {
-			// fmt.Println("t1")
+		go func(data *MySlice) {
 			for i := 0; i < 1000; i++ { // for providing more uncertainity
-				(*data)[2] -= 2
-				// fmt.Println("t1 changed to 2")
+				data.Slice[2] -= 2
 			}
 			wg.Done() // signal that one task is done
-			// fmt.Println("t1 - d")
-		}(&d2)
+		}(d2)
 
 		// starting `thread 2`.
 		//----------------------
 		// In `thread 2`, I'll try to update the 3rd position to 3 a 1000 times.
-		go func(data *[]int) {
-			// fmt.Println("t2")
+		go func(data *MySlice) {
 			for i := 0; i < 1000; i++ { // for providing more uncertainity
-				(*data)[2] += 3
-				// fmt.Println("t2 changed to 3")
+				data.Slice[2] += 3
 			}
 			wg.Done()
-			// fmt.Println("t2 - d")
-		}(&d2)
+		}(d2)
 
 		wg.Wait() // wait till all tasks are done
 		// if this wait group is not added, the main thread will resume
@@ -132,13 +141,13 @@ func test1WithoutUsingSTMNL(data *Data) {
 		// These waitgroups or countdownlatches can be used to make the main thread wait
 		// till all the operations are complete and then the thread can proceed.
 
-		// fmt.Println("Intermediate result of test 1 without locking")
-		// fmt.Println("data = ", *data)
+		// log.Println("Intermediate result of test 1 without locking")
+		// log.Println("data = ", *data)
 	}
 
-	fmt.Println("Results of test 1 without locking")
-	fmt.Println("d2 = ", d2)
-	fmt.Println("data = ", *data)
+	log.Println("Results of test 1 without locking")
+	log.Println("d2 = ", d2)
+	log.Println("data = ", data)
 
 	// As it can be seen from this example, it is not clear what the value of the 3rd
 	// position in the array will be - it can be 2 or 3.
@@ -170,15 +179,15 @@ WL:: Results of test 1 with locking
 d2 =  [1 2 10001003 4 5]
 data =  [1 2 10001003 4 5]
 */
-func test1WithoutUsingSTMWL(data *Data) {
-	d2 := (*data).([]int) // tedious type assertion in Golang :(
+func test1WithoutUsingSTMWL(data Data) {
+	d2 := data.(*MySlice) // tedious type assertion in Golang :(
+
 	// cannot get the address of `(*data).([]int)`
 	// because it is an expression and it is `homeless`
 	// hence need to do it in 2 steps
 	// d2 := (*data).([]int)
 	// and get the address of d2 as &d2 <--- this is tedious -_-
-
-	fmt.Println("d2 = ", d2, " and &d2 = ", &d2)
+	log.Println("d2 = ", d2, " and &d2 = ", &d2)
 
 	mut := new(sync.Mutex)
 
@@ -190,50 +199,50 @@ func test1WithoutUsingSTMWL(data *Data) {
 		// starting `thread 1`.
 		//--------------------
 		// In `thread 1`, I'll try to update the 3rd position to 2 a 1000 times.
-		go func(data *[]int) {
+		go func(data *MySlice) {
 			for i := 0; i < 1000; i++ { // for providing more uncertainity
 				mut.Lock() // take lock for determinism
-				(*data)[2] -= 2
+				data.Slice[2] -= 2
 				mut.Unlock() // unlock
 			}
 			wg.Done() // signal that one task is done
-		}(&d2)
+		}(d2)
 
 		// starting `thread 2`.
 		//----------------------
 		// In `thread 2`, I'll try to update the 3rd position to 3 a 1000 times.
-		go func(data *[]int) {
+		go func(data *MySlice) {
 			for i := 0; i < 1000; i++ { // for providing more uncertainity
 				mut.Lock() // take lock for determinism
-				(*data)[2] += 3
+				data.Slice[2] += 3
 				mut.Unlock() // unlock
 			}
 			wg.Done() // signal that one task is done and decrement the countdownlatch
-		}(&d2)
+		}(d2)
 
 		wg.Wait() // wait till all tasks are done
 		//# Transaction end ----
 
-		// fmt.Println("Intermediate results of test 1 with locking ::")
-		// fmt.Println("data = ", *data)
+		// log.Println("Intermediate results of test 1 with locking ::")
+		// log.Println("data = ", *data)
 	}
 
-	fmt.Println("WL:: Results of test 1 with locking")
-	fmt.Println("d2 = ", d2)
-	fmt.Println("data = ", *data)
+	log.Println("WL:: Results of test 1 with locking")
+	log.Println("d2 = ", d2)
+	log.Println("data = ", data)
 }
 
 /* test2WithSTM :: For exhibiting an example of synchronization with STM */
-func test2WithSTM(data *Data) {
+func test2WithSTM(data Data) {
 
-	cell1 := MySTM.MakeMemCell(*data)
+	cell1 := MySTM.MakeMemCell(data)
 
 	//# t1 definition
 	t1 := MySTM.NewT().
 		Do(func(t *Transaction) bool {
-			dinCell1 := make([]int, 0)
-			t.ReadT(cell1, &dinCell1) // read data from memory cell - reads are transactional operations
-			dinCell1[2] = dinCell1[2] - 2
+			dinCell1 := t.ReadT(cell1).(*MySlice) // read data from memory cell - reads are transactional operations
+			log.Println("dinCell1 = ", dinCell1)
+			dinCell1.Slice[2] = dinCell1.Slice[2] - 2
 			return t.WriteT(cell1, dinCell1)
 		}).
 		Done("T1")
@@ -242,16 +251,16 @@ func test2WithSTM(data *Data) {
 	//# t2 definition
 	t2 := MySTM.NewT().
 		Do(func(t *Transaction) bool {
-			dinCell1 := make([]int, 0)
-			t.ReadT(cell1, &dinCell1) // read data from memory cell - reads are transactional operations
-			dinCell1[2] = dinCell1[2] + 3
+			dinCell1 := t.ReadT(cell1).(*MySlice) // read data from memory cell - reads are transactional operations
+			log.Println("dinCell1 = ", dinCell1)
+			dinCell1.Slice[2] = dinCell1.Slice[2] + 3
 			return t.WriteT(cell1, dinCell1)
 		}).
 		Done("T2")
 	//# t2 definition
 
 	//# simulate a 1000 times
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1080; i++ {
 		// For a 10001 times, I want to do similiar operations on the slice in the data.
 		// I'll make 2 transactions.
 		// t1 will update the 3rd posn in the array by subtracting 2 to it
@@ -269,8 +278,7 @@ func test2WithSTM(data *Data) {
 
 	MySTM.Exec(MySTM.NewT().
 		Do(func(t *Transaction) bool {
-			data := make([]int, 0)
-			t.ReadT(cell1, &data)
+			data := t.ReadT(cell1)
 			log.Println("New data = ", data)
 			return true
 		}).

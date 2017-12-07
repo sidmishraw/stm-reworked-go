@@ -9,13 +9,7 @@
 
 package stm
 
-/*
-
-Data ::
-
---------
-
-Represents the data held in each of the `MemoryCell`s.
-
-*/
-type Data interface{}
+// Data represents the data held in each of the `MemoryCell`s.
+type Data interface {
+	Clone() Data // Clone should provide a copy of the Data
+}
